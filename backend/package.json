@@ -1,0 +1,77 @@
+{
+  "name": "mcp-ui-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5"
+  }
+}
+backend/index.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const app = express();
+app.use(bodyParser.json());
+app.use(require('cors')());
+
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'change-me-token';
+const KUBECONFIG_PATH = process.env.KUBECONFIG_PATH || '/etc/kubeconfig/kubeconfig';
+
+// Serve frontend static
+app.use('/', express.static(path.join(__dirname, 'public')));
+
+// health
+app.get('/healthz', (req, res) => res.json({ ok: true }));
+
+// simple authenticated endpoint to run kubectl commands
+app.post('/api/exec', (req, res) => {
+  const token = req.headers['x-api-token'] || '';
+  if (token !== ADMIN_TOKEN) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  const { command } = req.body;
+  if (!command || typeof command !== 'string') {
+    return res.status(400).json({ error: 'command required' });
+  }
+
+  // Basic allowlist: allow get/describe/top/logs only (adjust as needed)
+  const allowRegex = /^(kubectl\s+)?(get|describe|top|logs)\b/i;
+  if (!allowRegex.test(command.trim())) {
+    return res.status(400).json({ error: 'command not allowed' });
+  }
+
+  // Split command into args safely
+  // If user passed a full kubectl string, strip leading 'kubectl'
+  let cmd = command.trim();
+  if (cmd.startsWith('kubectl ')) cmd = cmd.replace(/^kubectl\s+/, '');
+  const args = cmd.split(/\s+/);
+
+  // Ensure kubeconfig exists
+  if (!fs.existsSync(KUBECONFIG_PATH)) {
+    return res.status(500).json({ error: 'kubeconfig not found on server' });
+  }
+
+  const kubectl = spawn('kubectl', args, { env: { ...process.env, KUBECONFIG: KUBECONFIG_PATH } });
+  let stdout = '';
+  let stderr = '';
+  kubectl.stdout.on('data', (d) => (stdout += d.toString()));
+  kubectl.stderr.on('data', (d) => (stderr += d.toString()));
+  kubectl.on('close', (code) => {
+    res.json({ code, stdout, stderr });
+  });
+});
+
+// fallback route to serve index.html for SPA routing
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log('MCP UI backend listening on', port));
