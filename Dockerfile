@@ -1,21 +1,23 @@
-# Stage 1: build frontend
-FROM node:18-alpine AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm install --silent
-COPY frontend ./
-RUN npm run build
+FROM node:18-alpine
 
-# Stage 2: build backend
-FROM node:18-alpine AS backend
+# Install kubectl
+RUN apk add --no-cache curl bash \
+ && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+ && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
+ && rm kubectl
+
+# Set working directory
 WORKDIR /app
-COPY backend/package*.json ./
-RUN npm install --production --silent
-COPY backend ./
-# copy frontend build into backend public
-COPY --from=frontend-builder /app/frontend/build ./public
 
-ENV PORT=3000
-EXPOSE 3000
-CMD ["node", "index.js"]
+# Copy backend (includes frontend inside backend)
+COPY backend/ ./backend
+COPY backend/frontend ./backend/frontend
+
+# Install backend dependencies
+WORKDIR /app/backend
+RUN npm install --production --silent
+
+EXPOSE 8080
+
+CMD ["node", "server.js"]
 

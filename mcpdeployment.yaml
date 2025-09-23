@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcpserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcpserver
+  template:
+    metadata:
+      labels:
+        app: mcpserver
+    spec:
+      containers:
+        - name: mcpserver
+          image: thulasikumar073/mcpserver:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /root/.kube
+              readOnly: true
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig-secret
+

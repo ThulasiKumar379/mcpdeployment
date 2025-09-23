@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MCP UI</title>
+</head>
+<body>
+  <h1>MCP UI - Kubernetes Cluster</h1>
+  <form id="kubectlForm">
+    <input type="text" id="cmd" placeholder="kubectl get pods" size="50">
+    <button type="submit">Run</button>
+  </form>
+  <pre id="output"></pre>
+
+  <script>
+    const form = document.getElementById("kubectlForm");
+    const output = document.getElementById("output");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const cmd = document.getElementById("cmd").value;
+      const res = await fetch("/api/kubectl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd })
+      });
+      const text = await res.text();
+      output.textContent = text;
+    });
+  </script>
+</body>
+</html>
+
